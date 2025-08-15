@@ -1,0 +1,111 @@
+{
+  "error_signatures": [
+    {
+      "description": "BMC SEL log - needs decode",
+      "match_type": "ERROR",
+      "file": "rm_get_sel_*.log",
+      "error_text": [
+        "Do not use"
+      ],
+      "whitelist_text": [
+        ""
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Rack Manager and BMC suspected errors check. Keywords relationship is OR. No regx. taken out certain errors"
+    },
+    {
+      "description": "Test PRETEST errors",
+      "match_type": "PASS",
+      "file": "test_config.json",
+      "pass_text": [
+        "version\": \"10.0.20348",
+        "high_performance_mode\": \"Enabled"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Initial setup check.  No regx."
+    },
+    {
+      "description": "BMC CSV decoded FLAT log",
+      "match_type": "ERROR",
+      "file": "rm_get_sel*decode.flat.csv",
+	  "good_log": "..\\common\\ac_good_rm_get_sel_decode.flat.csv",
+      "error_text": [
+        "error",
+        "fail",
+        "critical",
+        "degraded"
+      ],
+      "whitelist_text": [
+        "non-critical",
+        "non-error",
+        "Lower Critical going low",
+        "Correctable error",
+        "OS graceful shutdown",
+        "Log Area Reset/Cleared",
+        "PXE Server not found",
+		"Event Data not defined"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Rack Manager and BMC suspected errors check. Keywords relationship is OR. No regx. taken out certain errors"
+    },
+    {
+      "description": "Linux dmesg suspected errors",
+      "match_type": "ERROR",
+      "file": "dmesg*serialized.log",
+	  "good_log": "..\\common\\ac_good_dmesg.log",
+      "error_text": [
+        "Hardware Error",
+        "error",
+		"Severity=err",
+		"Firmware Bug"
+      ],
+      "whitelist_text": [
+        "DEBUG",
+        "ip_local_port_range",
+        "not flushed",
+		"SDEI"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Linux dmesg suspected errors check. Keywords relationship is OR. No regx"
+    },
+    {
+      "description": "XMC Redfish event suspected errors",
+      "match_type": "ERROR",
+      "file": "Baseboard_System_Events_DECODED_FULL_SIMP.csv",
+	  "good_log": "..\\common\\good_cper_DECODED_FULL_SIMP.csv",
+      "error_text": [
+        "Severity:Critical"
+      ],
+      "whitelist_text": [
+        "MetaData authentication failure",
+		"Verification of image"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "XMC events suspected errors check. Keywords relationship is OR. Script already serialized log 1 entry to 1 line. No regx"
+    },
+    {
+      "description": "I2C decode mismatche",
+      "match_type": "ERROR",
+      "file": "decoded_s0_*.txt",
+      "error_text": [
+        "-----> ['Bit positio"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "I2c dump mismatch. Keywords relationship is OR. No regx"
+    },
+    {
+      "description": "SDR errors",
+      "match_type": "ERROR",
+      "file": "internal_sdr_info.log",
+      "error_text": [
+        "| nc",
+        "| cr"
+      ],
+      "whitelist_text": [
+        "DEBUG"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "SDR errors. Keywords relationship is OR. No regx"
+    }
+  ]
+}
