@@ -662,6 +662,8 @@ class SignatureHandler(BaseHTTPRequestHandler):
         }
 
         function addSignature() {
+            // Note: stop_on_fail_check is stored as a string ("true"/"false") 
+            // to match the format expected by log_analyzer.py
             const newSig = {
                 description: 'New Signature',
                 match_type: 'ERROR',
@@ -761,7 +763,9 @@ class SignatureHandler(BaseHTTPRequestHandler):
 def get_local_ip():
     """Get the local IP address of this machine."""
     try:
-        # Create a socket to determine local IP
+        # Use Google's DNS server to determine the local network interface.
+        # Note: No data is actually transmitted; we just need a valid external
+        # address to query the routing table for the local interface IP.
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
             local_ip = s.getsockname()[0]
