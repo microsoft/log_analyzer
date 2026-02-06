@@ -70,7 +70,12 @@ class SignatureHandler(BaseHTTPRequestHandler):
     def load_signature(self):
         """Load signature JSON file and return it."""
         try:
-            signature_file = self.sut_folder / f"settings.{self.signature_name}.json"
+            # Parse query parameters to get the signature name
+            parsed_path = urlparse(self.path)
+            query_params = parse_qs(parsed_path.query)
+            signature_name = query_params.get('name', [self.signature_name])[0]
+            
+            signature_file = self.sut_folder / f"settings.{signature_name}.json"
             
             if not signature_file.exists():
                 self.send_json_response({'error': f'Signature file not found: {signature_file}'}, 404)
@@ -80,7 +85,7 @@ class SignatureHandler(BaseHTTPRequestHandler):
                 data = json.load(f)
             
             response = {
-                'signature_name': self.signature_name,
+                'signature_name': signature_name,
                 'data': data,
                 'file_path': str(signature_file)
             }
@@ -593,8 +598,8 @@ class SignatureHandler(BaseHTTPRequestHandler):
                     <div class="form-group">
                         <label>Stop on Fail:</label>
                         <select onchange="updateSignature(${index}, 'stop_on_fail_check', this.value)">
-                            <option value="false" ${sig.stop_on_fail_check === 'false' ? 'selected' : ''}>false</option>
-                            <option value="true" ${sig.stop_on_fail_check === 'true' ? 'selected' : ''}>true</option>
+                            <option value="false" ${String(sig.stop_on_fail_check) === 'false' ? 'selected' : ''}>false</option>
+                            <option value="true" ${String(sig.stop_on_fail_check) === 'true' ? 'selected' : ''}>true</option>
                         </select>
                     </div>
                 </div>
@@ -757,11 +762,10 @@ def get_local_ip():
     """Get the local IP address of this machine."""
     try:
         # Create a socket to determine local IP
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            return local_ip
     except Exception:
         return "127.0.0.1"
 
