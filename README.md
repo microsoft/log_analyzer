@@ -137,6 +137,7 @@ python log_analyzer.py \
 ```text
 log_analyzer/
 ├── log_analyzer.py        # Main entry point
+├── signature_creator.py   # Web UI for editing signature configs
 ├── lib_log.py             # Core analysis engine
 ├── requirements.txt
 ├── version.txt
@@ -171,6 +172,60 @@ Create `sut/settings.gpu_debug.json`:
   ]
 }
 ```
+
+---
+
+## 🎨 Signature Creator (Web UI)
+
+Create and edit signature configuration files using an interactive web interface!
+
+### Quick Start
+
+```bash
+cd log_analyzer
+python signature_creator.py
+```
+
+Then open http://localhost:8080 in your browser.
+
+### Features
+
+- **Zero Dependencies**: Uses only Python's built-in `http.server` module
+- **Beautiful UI**: Modern, responsive web interface with real-time editing
+- **Full Control**: Add, edit, delete, and reorder signatures
+- **Smart Forms**: Dynamic forms that adapt to match_type (ERROR/PASS/JSON)
+- **Network Access**: Accessible from LAN/remote via `0.0.0.0` binding
+
+### Command Line Options
+
+```bash
+# Default: port 8080, signature 'sample'
+python signature_creator.py
+
+# Custom port and signature
+python signature_creator.py --port 9000 --signature gpu_debug
+
+# Help
+python signature_creator.py --help
+```
+
+### Usage Workflow
+
+1. **Start the server** with the signature you want to edit
+2. **Open the URL** shown in the console (localhost or network IP)
+3. **Edit signatures** using the web interface:
+   - Add new signatures with "+ Add Signature"
+   - Edit fields directly (description, match_type, file pattern, etc.)
+   - Add/remove error_text, whitelist_text, or pass_text entries
+   - Reorder signatures with ↑/↓ buttons
+   - Delete unwanted signatures
+4. **Save changes** with the "Save" button
+5. **View JSON** to inspect the raw configuration
+
+The UI will automatically show/hide fields based on the selected `match_type`:
+- **ERROR**: Shows `error_text` and `whitelist_text`
+- **PASS**: Shows `pass_text`
+- **JSON**: Shows `error_text` (for key-value pairs) and `whitelist_text`
 
 ---
 
