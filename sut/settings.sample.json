@@ -1,111 +1,126 @@
 {
+  "_comment": "Generic example signature pack. Copy to sut/settings.<name>.json (git-ignored) and tune it for your platform. Each signature: ERROR = any error_text matches (OR) unless a whitelist_text also matches; PASS = fails when a pass_text is missing; JSON = all key/value pairs must match (AND). Matching is case-insensitive substring, no regex.",
+  "dedup_mode": "term",
   "error_signatures": [
-    {
-      "description": "BMC SEL log - needs decode",
-      "match_type": "ERROR",
-      "file": "rm_get_sel_*.log",
-      "error_text": [
-        "Do not use"
-      ],
-      "whitelist_text": [
-        ""
-      ],
-      "stop_on_fail_check": "false",
-      "comment": "Rack Manager and BMC suspected errors check. Keywords relationship is OR. No regx. taken out certain errors"
-    },
-    {
-      "description": "Test PRETEST errors",
-      "match_type": "PASS",
-      "file": "test_config.json",
-      "pass_text": [
-        "version\": \"10.0.20348",
-        "high_performance_mode\": \"Enabled"
-      ],
-      "stop_on_fail_check": "false",
-      "comment": "Initial setup check.  No regx."
-    },
-    {
-      "description": "BMC CSV decoded FLAT log",
-      "match_type": "ERROR",
-      "file": "rm_get_sel*decode.flat.csv",
-	  "good_log": "..\\common\\ac_good_rm_get_sel_decode.flat.csv",
-      "error_text": [
-        "error",
-        "fail",
-        "critical",
-        "degraded"
-      ],
-      "whitelist_text": [
-        "non-critical",
-        "non-error",
-        "Lower Critical going low",
-        "Correctable error",
-        "OS graceful shutdown",
-        "Log Area Reset/Cleared",
-        "PXE Server not found",
-		"Event Data not defined"
-      ],
-      "stop_on_fail_check": "false",
-      "comment": "Rack Manager and BMC suspected errors check. Keywords relationship is OR. No regx. taken out certain errors"
-    },
     {
       "description": "Linux dmesg suspected errors",
       "match_type": "ERROR",
-      "file": "dmesg*serialized.log",
-	  "good_log": "..\\common\\ac_good_dmesg.log",
+      "file": "dmesg*.log",
       "error_text": [
+        "Severity=emerg",
+        "Severity=alert",
+        "Severity=crit",
+        "Severity=err",
         "Hardware Error",
-        "error",
-		"Severity=err",
-		"Firmware Bug"
+        "Machine check",
+        "Kernel panic",
+        "Call Trace"
       ],
       "whitelist_text": [
         "DEBUG",
-        "ip_local_port_range",
-        "not flushed",
-		"SDEI"
+        "SGX disabled by BIOS",
+        "ip_local_port_range"
       ],
       "stop_on_fail_check": "false",
-      "comment": "Linux dmesg suspected errors check. Keywords relationship is OR. No regx"
+      "comment": "Kernel log errors. Keywords relationship is OR. No regex."
     },
     {
-      "description": "XMC Redfish event suspected errors",
+      "description": "PCIe AER / DPC events",
       "match_type": "ERROR",
-      "file": "Baseboard_System_Events_DECODED_FULL_SIMP.csv",
-	  "good_log": "..\\common\\good_cper_DECODED_FULL_SIMP.csv",
+      "file": "dmesg*.log",
       "error_text": [
-        "Severity:Critical"
+        "AER: Uncorrected",
+        "AER: Multiple Uncorrected",
+        "DPC: containment event",
+        "PCIe Bus Error: severity=Uncorrected",
+        "Link Down"
       ],
       "whitelist_text": [
-        "MetaData authentication failure",
-		"Verification of image"
+        "severity=Corrected"
       ],
       "stop_on_fail_check": "false",
-      "comment": "XMC events suspected errors check. Keywords relationship is OR. Script already serialized log 1 entry to 1 line. No regx"
+      "comment": "Uncorrectable PCIe errors and downstream port containment."
     },
     {
-      "description": "I2C decode mismatche",
+      "description": "Linux syslog / journal errors",
       "match_type": "ERROR",
-      "file": "decoded_s0_*.txt",
+      "file": "*syslog*.log",
       "error_text": [
-        "-----> ['Bit positio"
-      ],
-      "stop_on_fail_check": "false",
-      "comment": "I2c dump mismatch. Keywords relationship is OR. No regx"
-    },
-    {
-      "description": "SDR errors",
-      "match_type": "ERROR",
-      "file": "internal_sdr_info.log",
-      "error_text": [
-        "| nc",
-        "| cr"
+        "segfault",
+        "Out of memory",
+        "I/O error",
+        "blk_update_request",
+        "EXT4-fs error",
+        "nvme",
+        "timed out"
       ],
       "whitelist_text": [
         "DEBUG"
       ],
       "stop_on_fail_check": "false",
-      "comment": "SDR errors. Keywords relationship is OR. No regx"
+      "comment": "Common user-space and storage errors. Keywords relationship is OR."
+    },
+    {
+      "description": "BMC SEL suspected events (text export)",
+      "match_type": "ERROR",
+      "file": "*sel*.log",
+      "error_text": [
+        "error",
+        "fail",
+        "critical",
+        "degraded",
+        "Uncorrectable"
+      ],
+      "whitelist_text": [
+        "non-critical",
+        "non-error",
+        "Lower Critical going low",
+        "Upper Critical going high",
+        "Correctable error",
+        "OS graceful shutdown",
+        "Log Area Reset/Cleared"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Already human-readable SEL text (for example 'ipmitool sel elist'). No decoding is performed."
+    },
+    {
+      "description": "Windows System event log suspected errors",
+      "match_type": "ERROR",
+      "file": "SystemEvtParsed.csv",
+      "error_text": [
+        "Error",
+        "Critical"
+      ],
+      "whitelist_text": [
+        "DEBUG",
+        "Correctable error",
+        "Application Popup",
+        "The previous system shutdown",
+        "The Device Setup Manager service"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Windows event log exported one entry per line. Keywords relationship is OR."
+    },
+    {
+      "description": "Redfish-style event log critical entries",
+      "match_type": "JSON",
+      "file": "*event_log*.json",
+      "error_text": [
+        { "Severity": "Critical" }
+      ],
+      "whitelist_text": [],
+      "stop_on_fail_check": "false",
+      "comment": "JSON check. Key/value pairs relationship is AND."
+    },
+    {
+      "description": "Test summary must report PASS",
+      "match_type": "PASS",
+      "file": "test_summary*.log",
+      "pass_text": [
+        "Overall result: PASS"
+      ],
+      "stop_on_fail_check": "false",
+      "comment": "Fails when the pass text is missing from the matched file."
     }
   ]
 }
