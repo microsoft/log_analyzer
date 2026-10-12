@@ -215,6 +215,29 @@ python tools/check_public_release.py
 internal URLs, UNC shares or personal paths. Organisation-specific terms belong in the git-ignored
 `tools/public_release_denylist.local.txt`, one regular expression per line. Run the check before every push.
 
+### Dependency licenses
+
+`tests/test_public_release.py` also fails if `requirements.txt` lists one of the copyleft (GPL/LGPL) packages this
+project used to depend on. Keep new dependencies MIT, BSD or Apache-2.0
+compatible, and add them to the table below.
+
+## Third-party dependencies
+
+This project is MIT-licensed and bundles no third-party code. Its runtime dependencies are installed separately with
+`pip` and all use permissive licenses:
+
+| Package | License | Used for |
+|---|---|---|
+| `rapidfuzz` | MIT | Fuzzy line similarity (de-duplication, good-log comparison) |
+| `charset-normalizer` | MIT | Log file encoding detection |
+| `requests` | Apache-2.0 | OpenAI-compatible HTTP endpoint calls |
+| `pandas` | BSD-3-Clause | Sensor workbook digest (optional) |
+| `openpyxl` | MIT | Sensor workbook digest (optional) |
+| `pytest` | MIT | Tests (development only) |
+
+External AI command-line tools such as the GitHub Copilot CLI are invoked, not redistributed, and are subject to their
+own terms.
+
 ## Contributing
 
 This project welcomes contributions and suggestions. Most contributions require you to agree to a Contributor License

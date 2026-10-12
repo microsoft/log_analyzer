@@ -1,5 +1,6 @@
 """Guardrails that keep private data out of this public repository."""
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -41,3 +42,17 @@ def test_only_sample_settings_are_tracked():
                          capture_output=True, text=True, check=True).stdout.split()
     settings = [p for p in out if Path(p).name.startswith("settings.")]
     assert settings == ["sut/settings.sample.json"]
+
+
+# Copyleft packages this project has depended on before; MIT-licensed
+# replacements exist (rapidfuzz, charset-normalizer).
+COPYLEFT_PACKAGES = {"fuzzywuzzy", "python-levenshtein", "levenshtein", "chardet"}
+
+
+def test_requirements_have_no_copyleft_packages():
+    names = set()
+    for line in (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            names.add(re.split(r"[<>=!~;\[ ]", line, 1)[0].strip().lower())
+    assert not names & COPYLEFT_PACKAGES
