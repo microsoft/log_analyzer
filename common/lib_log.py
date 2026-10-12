@@ -1,5 +1,14 @@
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz as _rapidfuzz
 from pathlib import Path
+
+
+class fuzz:  # noqa: N801
+    """Integer 0-100 similarity, matching the scale the thresholds were tuned on."""
+
+    @staticmethod
+    def ratio(a, b):
+        return int(round(_rapidfuzz.ratio(a, b)))
+
 
 # Header/footer styling for the HTML this module writes. Cosmetic only: analysis
 # must still complete if branding cannot load, hence the no-op stub fallback.
@@ -35,7 +44,6 @@ import tempfile
 import time
 import csv
 from xml.etree import ElementTree
-import chardet
 from collections import defaultdict
 
 import requests
@@ -1089,18 +1097,17 @@ def clean_error_line(line):
 
 def robust_readlines(file_path):
     """
-    Read the file as raw bytes, detect the best encoding with chardet,
+    Read the file as raw bytes, detect the best encoding with charset-normalizer,
     then decode with 'replace' so we never fail on invalid bytes.
     Finally, split into lines.
     """
-    import chardet
+    from charset_normalizer import detect
     import logging
     
     with open(file_path, 'rb') as f:
         raw_data = f.read()
 
-    # Use chardet to guess the encoding
-    guess = chardet.detect(raw_data)  # e.g. {'encoding': 'UTF-8', 'confidence': 0.99}
+    guess = detect(raw_data)  # e.g. {'encoding': 'utf_8', 'confidence': 0.99}
     guessed_encoding = guess['encoding'] or 'utf-8'
 
     try:
@@ -1361,7 +1368,6 @@ def fuzzy_match_lines(target_lines, good_lines, threshold=0.8, max_target_lines=
     Pre-filters exact matches via set lookup to avoid expensive fuzzy calls.
     Caps target lines and enforces a wall-clock timeout to prevent runaway execution.
     """
-    from fuzzywuzzy import fuzz
     import logging
     import time as _time
     
