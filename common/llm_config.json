@@ -1,7 +1,15 @@
 {
-  "model": "provider/model-name",
-  "api_url": "http://<server-ip>:<port>/v1/chat/completions",
-  "timeout": 120,
-  "max_tokens": 2048,
-  "max_context_tokens": 131072
+  "_comment": "AI settings. Copy to llm_config.local.json (git-ignored) for private values. Env vars LOG_ANALYZER_AI_URL / LOG_ANALYZER_AI_MODEL / LOG_ANALYZER_AI_BACKEND / LOG_ANALYZER_AI_CLI override this file.",
+  "model": "your-local-model-name",
+  "api_url": "http://localhost:11434/v1/chat/completions",
+  "timeout": 300,
+  "max_tokens": 4096,
+  "max_context_tokens": 131072,
+  "ai_backend": "cli",
+  "ai_cli": {
+    "type": "copilot",
+    "model": "auto",
+    "copilot_args": ["--allow-all-tools", "--no-ask-user"],
+    "custom_command": []
+  }
 }

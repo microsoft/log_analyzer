@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "_comment": [
+    "Maps a platform to its signature packs and to the knowledge sources the AI",
+    "steps (deep_analysis.py, ado_match_ai.py) may consult for it. Consumed by",
+    "sku_router.py; edit this file rather than hard-coding a platform anywhere.",
+    "",
+    "Put your own platforms and settings in log_analyzer/sku_registry.local.json",
+    "(git-ignored). It is deep-merged over this file, so it only needs the keys",
+    "you want to add or change.",
+    "",
+    "fingerprints.path    - regexes matched against the scan folder path and file names",
+    "fingerprints.content - regexes matched against a bounded sample of the log text",
+    "Keep fingerprints specific: a pattern that also fires on another platform",
+    "turns 'unknown' into a wrong answer.",
+    "",
+    "default_sku - platform assumed ONLY when no signal is found at all. It is",
+    "reported as confidence='low', method='default' and is never used to break",
+    "a tie between conflicting evidence. null = refuse to guess."
+  ],
+
+  "default_sku": null,
+
+  "issue_tracker": {
+    "_comment": "Link template for issue IDs cited in reports. {org} and {project} are filled from this block, {id} from the cited issue.",
+    "work_item_url": "https://dev.azure.com/{org}/{project}/_workitems/edit/{id}",
+    "org": "",
+    "project": ""
+  },
+
+  "skus": {
+    "EXAMPLE": {
+      "display_name": "Example platform",
+      "aliases": [],
+      "knowledge": {
+        "_comment": "Names of skills, MCP servers or tools configured in YOUR AI CLI. issue_source = known-issue / bug database, kb = platform documentation, testplan = test-case library. null = not available; the AI steps then rely only on the log files.",
+        "issue_source": null,
+        "kb": null,
+        "testplan": null
+      },
+      "signature_packs": ["settings.sample.json"],
+      "fingerprints": {
+        "path": ["(?<![A-Za-z0-9])EXAMPLE(?![A-Za-z0-9])"],
+        "content": ["(?<![A-Za-z0-9])EXAMPLE_PLATFORM(?![A-Za-z0-9])"]
+      }
+    }
+  }
+}

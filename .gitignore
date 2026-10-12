@@ -354,7 +354,7 @@ ASALocalRun/
 # MSBuild Binary and Structured Log
 *.binlog
 
-# NVidia Nsight GPU debugger configuration file
+# Nsight GPU debugger configuration file
 *.nvuser
 
 # MFractors (Xamarin productivity tool) working folder
@@ -398,3 +398,16 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# ---- log_analyzer public-release rules ----
+# Private settings and local overrides must never be committed.
+common/llm_config.local.json
+log_analyzer/sku_registry.local.json
+tools/public_release_denylist.local.txt
+sut/**/settings.*.json
+!sut/settings.sample.json
+*.db
+*.bak*
+.DS_Store
+.pytest_cache/
+__pycache__/
