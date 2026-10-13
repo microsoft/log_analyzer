@@ -135,10 +135,11 @@ def create_parser():
         "--signature",
         required=True,
         help=(
-            "Signature pack to load: either a bare name (without the 'settings.' prefix or "
+            "Signature pack(s) to load: a bare name (without the 'settings.' prefix or "
             "'.json' extension), searched recursively in the repository's sut folder, or a "
-            "path to a settings JSON file. For example, --signature sample loads "
-            "sut/settings.sample.json."
+            "path to a settings JSON file. Separate several packs with commas; their "
+            "signatures are combined. For example, --signature sample loads "
+            "sut/settings.sample.json and --signature sample,ocp_diag adds the OCP pack."
         )
     )
     
@@ -159,6 +160,16 @@ def create_parser():
         type=_bool_arg,
         default=False,
         help="Specify whether to convert .json and .xml files to .csv before error signature search (default: false). Pass 'true' to enable."
+    )
+    optional_group.add_argument(
+        "--ocp_diag",
+        choices=("auto", "true", "false"),
+        default="auto",
+        help=(
+            "Normalize OCP Test and Validation (spec v2.0) diagnostic output found in "
+            "*.json/*.jsonl files into *.ocptv.log/*.ocptv.csv and apply the ocp_diag "
+            "signature pack (default: auto = only when such output is detected)."
+        )
     )
     optional_group.add_argument(
         "--no_stop",
@@ -265,28 +276,95 @@ def find_signature_config(sig_input: str) -> Path:
     )
     sys.exit(1)
 
-def read_config_m(signature_arg: str):
-    """
-    Reads the configuration based on the signature.
-    """
+def split_signatures(sig_input: str):
+    """Split a comma-separated --signature value into individual pack names."""
+    return [part.strip() for part in str(sig_input).split(",") if part.strip()]
+
+
+def primary_signature(sig_input: str) -> str:
+    """Normalized name of the first pack; used for platform routing."""
+    parts = split_signatures(sig_input)
+    return normalize_signature(parts[0]) if parts else ""
+
+
+def _load_pack(signature_arg: str):
     config_file = find_signature_config(signature_arg)
     try:
         import json
         with open(config_file, 'r', encoding='utf-8') as f:
             config = json.load(f)
-        logging.info(f"Loaded configuration from {config_file}")
-        # This local reader shadows lib_log.read_config_m, so the pack-level
-        # hooks have to be applied here too or a pack's declared dedup_mode
-        # and its term table are silently ignored on the CLI path.
-        try:
-            apply_pack_dedup_mode(config)
-            collect_signature_terms(config)
-        except Exception as exc:
-            logging.warning(f"Could not apply pack dedup settings: {exc}")
-        return config
     except Exception as e:
         logging.error(f"Error reading configuration file {config_file}: {e}")
         sys.exit(1)
+    logging.info(f"Loaded configuration from {config_file}")
+    return config, config_file
+
+
+def merge_pack(config, extra, extra_file=None):
+    """Append another pack's signatures to an already loaded configuration."""
+    config.setdefault("error_signatures", [])
+    config["error_signatures"].extend(extra.get("error_signatures") or [])
+    if extra_file is not None:
+        config.setdefault("_loaded_packs", []).append(str(extra_file))
+    try:
+        collect_signature_terms(config)
+    except Exception as exc:
+        logging.warning(f"Could not index signature terms: {exc}")
+    return config
+
+
+def read_config_m(signature_arg: str):
+    """
+    Reads the configuration for one or more comma-separated signature packs.
+
+    The first pack provides pack-level settings (such as dedup_mode); the
+    signatures of the following packs are appended.
+    """
+    names = split_signatures(signature_arg)
+    if not names:
+        logging.error("No signature pack given.")
+        sys.exit(1)
+    config, config_file = _load_pack(names[0])
+    config["_loaded_packs"] = [str(config_file)]
+    for name in names[1:]:
+        extra, extra_file = _load_pack(name)
+        merge_pack(config, extra, extra_file)
+    # This local reader shadows lib_log.read_config_m, so the pack-level
+    # hooks have to be applied here too or a pack's declared dedup_mode
+    # and its term table are silently ignored on the CLI path.
+    try:
+        apply_pack_dedup_mode(config)
+        collect_signature_terms(config)
+    except Exception as exc:
+        logging.warning(f"Could not apply pack dedup settings: {exc}")
+    return config
+
+
+def run_ocp_diag_step(args, config):
+    """Normalize OCP diagnostic output and make sure its signatures are loaded.
+
+    Returns the list of source files that were normalized.
+    """
+    if args.ocp_diag == "false":
+        return []
+    try:
+        import ocptv
+    except Exception as exc:
+        logging.warning(f"OCP diag support unavailable: {exc}")
+        return []
+    converted, legacy = ocptv.convert_folder(args.scan_folder)
+    if legacy:
+        logging.info(f"OCP diag: {len(legacy)} legacy (pre-2.0) file(s) left as raw text.")
+    if not converted:
+        if args.ocp_diag == "true":
+            logging.warning("OCP diag: no OCP v2.0 diagnostic output found in the scan folder.")
+        return []
+    loaded = [Path(p).name.lower() for p in config.get("_loaded_packs", [])]
+    if "settings.ocp_diag.json" not in loaded:
+        extra, extra_file = _load_pack("ocp_diag")
+        merge_pack(config, extra, extra_file)
+        logging.info("OCP diag: added the ocp_diag signature pack.")
+    return converted
 
 def run_result_analyzer(input_logpath):
     """
@@ -367,6 +445,7 @@ _REPORT_LABELS = [
 _ARTIFACT_LABELS = [
     ("sdr_reading", "BMC SDR sensor readings"),
     ("sensor_reading", "Sensor readings"),
+    (".ocptv", "OCP diagnostic output (normalized)"),
 ]
 _ARTIFACT_SUFFIXES = {".xlsx", ".xlsm", ".csv"}
 
@@ -639,7 +718,7 @@ def prepare_platform_analysis(args, config):
     try:
         declared = config.get("sku") or config.get("SUT_SKU")
         detection = sku_router.detect_sku(
-            args.scan_folder, explicit=declared, pack=normalize_signature(args.signature))
+            args.scan_folder, explicit=declared, pack=primary_signature(args.signature))
         logging.info(sku_router.describe(detection))
         return detection
     except Exception as exc:
@@ -666,7 +745,7 @@ def run_deep_analysis(args):
     _da_to = int(os.getenv("LOG_ANALYZER_DEEP_TIMEOUT", "3600"))
     cmd = [sys.executable, str(deep_script),
            "--scan_folder", str(args.scan_folder),
-           "--signature", normalize_signature(args.signature),
+           "--signature", primary_signature(args.signature),
            "--timeout", str(_da_to)]
     deep_model = os.getenv("LOG_ANALYZER_DEEP_MODEL", "").strip()
     if deep_model:
@@ -710,9 +789,11 @@ def main():
     logging.info(f"Scan folder set to: {args.scan_folder}")
     display_title("LOG_ANALYZER")
 
+    ocp_files = run_ocp_diag_step(args, config)
+
     if args.to_csv:
         logging.info("Converting JSON and XML files to CSV...")
-        convert_files_to_csv(args.scan_folder)
+        convert_files_to_csv(args.scan_folder, skip=ocp_files)
 
     # Perform log analysis and pass through the no_stop flag AND the new compare_good_log flag
     critical_stop, killed_processes_info, log_analyzer_log_file = log_analyzer(

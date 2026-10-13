@@ -46,11 +46,11 @@ def test_email_allowlist_matches_exact_domain_only():
     assert not allowed("internal URL", "aka.ms/private-link")  # public-release: allow
 
 
-def test_only_sample_settings_are_tracked():
-    out = subprocess.run(["git", "ls-files", "sut"], cwd=REPO_ROOT,
-                         capture_output=True, text=True, check=True).stdout.split()
-    settings = [p for p in out if Path(p).name.startswith("settings.")]
-    assert settings == ["sut/settings.sample.json"]
+def test_only_public_settings_are_tracked():
+    out = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "sut"],
+                         cwd=REPO_ROOT, capture_output=True, text=True, check=True).stdout.split()
+    settings = sorted(p for p in out if Path(p).name.startswith("settings."))
+    assert settings == ["sut/settings.ocp_diag.json", "sut/settings.sample.json"]
 
 
 # Copyleft packages this project has depended on before; MIT-licensed

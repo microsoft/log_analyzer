@@ -127,13 +127,20 @@ def convert_xml_to_csv(xml_path, csv_path):
         logging.warning(f"Failed to convert XML to CSV for {xml_path}: {e}")
 
 
-def convert_files_to_csv(scan_folder):
-    """Scan a folder for .json and .xml files and convert them to CSV."""
+def convert_files_to_csv(scan_folder, skip=None):
+    """Scan a folder for .json and .xml files and convert them to CSV.
+
+    ``skip`` is an optional collection of paths that are already handled by a
+    format-specific converter (for example OCP diagnostic output).
+    """
+    skip = {os.path.normcase(os.path.abspath(str(p))) for p in (skip or [])}
     for root, dirs, files in os.walk(scan_folder):
         for file_name in files:
             if file_name == "settings.json":  # ignore the settings.json file
                 continue
             file_path = os.path.join(root, file_name)
+            if os.path.normcase(os.path.abspath(file_path)) in skip:
+                continue
             csv_file = file_path.rsplit(".", 1)[0] + ".csv"
 
             if file_name.endswith(".json"):
@@ -899,11 +906,19 @@ _PACK_DEDUP_MODE = None
 # when a signature pack is loaded; used only by 'term' dedup.
 _PACK_SIGNATURE_TERMS = {}
 
+# signature name (lower) -> dedup mode declared on that signature. Lets one
+# signature (e.g. one line per failing diagnosis) override the pack-wide mode.
+_PACK_SIGNATURE_DEDUP = {}
+
 
 def collect_signature_terms(settings):
-    """Record each signature's configured terms so 'term' dedup can key on them."""
-    global _PACK_SIGNATURE_TERMS
+    """Record each signature's configured terms so 'term' dedup can key on them.
+
+    Also records per-signature ``dedup_mode`` overrides.
+    """
+    global _PACK_SIGNATURE_TERMS, _PACK_SIGNATURE_DEDUP
     terms = {}
+    modes = {}
     for entry in (settings or {}).get("error_signatures") or []:
         if not isinstance(entry, dict):
             continue
@@ -912,6 +927,9 @@ def collect_signature_terms(settings):
                    or entry.get("name") or "").strip().lower()
         if not name:
             continue
+        own_mode = str(entry.get("dedup_mode") or "").strip().lower()
+        if own_mode in DEDUP_MODES:
+            modes[name] = own_mode
         collected = []
         for key in ("error_text", "pass_text", "warning_text"):
             value = entry.get(key)
@@ -924,6 +942,7 @@ def collect_signature_terms(settings):
             terms.setdefault(name, ())
             terms[name] = tuple(sorted(set(terms[name]) | set(cleaned)))
     _PACK_SIGNATURE_TERMS = terms
+    _PACK_SIGNATURE_DEDUP = modes
     return _PACK_SIGNATURE_TERMS
 
 
@@ -1026,8 +1045,28 @@ def deduplicate_signatures(error_signatures, threshold=80, mode=None, category_s
     hide a whole signature, but it *can* hide a fault when one signature lists
     several unrelated terms. mode='term' keys on the term that actually matched
     and is the smallest summary that shows every configured fault.
+
+    A signature that declares its own ``dedup_mode`` is deduplicated with that
+    mode; all other categories use the pack-wide mode.
     """
     resolved = _resolve_dedup_mode(mode)
+    category_signatures = category_signatures or {}
+    if _PACK_SIGNATURE_DEDUP and not os.getenv("LOG_ANALYZER_DEDUP_MODE"):
+        groups = {}
+        for category, entries in error_signatures.items():
+            sig_name = category_signatures.get(category) or _dedup_signature_name(entries)
+            own = _PACK_SIGNATURE_DEDUP.get(sig_name, resolved)
+            groups.setdefault(own, {})[category] = entries
+        if len(groups) > 1 or resolved not in groups:
+            kept = set()
+            for group_mode, group in groups.items():
+                kept.update(_deduplicate_with_mode(group, threshold, group_mode,
+                                                   category_signatures))
+            return {c: e for c, e in error_signatures.items() if c in kept}
+    return _deduplicate_with_mode(error_signatures, threshold, resolved, category_signatures)
+
+
+def _deduplicate_with_mode(error_signatures, threshold, resolved, category_signatures):
     if resolved == "term":
         return _dedup_by_term(error_signatures, category_signatures)
     if resolved == "signature":
@@ -2672,12 +2711,23 @@ def log_analyzer(config, log_folder, no_stop=False, compare_good_log=False):
                 log_file.write(f"Analyzing file: {file_path}\n")
 
                 if match_type == 'JSON':
-                    # JSON analysis
-                    matched_elements = analyze_json_file(file_path, sig, log_file)
-                    if matched_elements:
+                    matched_elements, json_error = analyze_json_file(file_path, sig, log_file)
+                    if json_error:
+                        # An unparseable file must never read as "signature not seen".
+                        msg = (f"Error signature [{description}] missing: Expect - parsable JSON - "
+                               f"but {os.path.basename(file_path)} could not be parsed ({json_error})")
+                        log_file.write(msg + "\n")
+                        logging.error(msg)
+                        if stop_on_fail_check:
+                            critical_stop_descriptions.append(description)
+                            stop_triggered = True
+                    elif matched_elements:
                         for element, matched_pairs in matched_elements:
-                            log_file.write(f"Error signature [{description}] matched in JSON: {matched_pairs}\n")
-                            logging.warning(f"Error signature [{description}] matched in JSON: {matched_pairs}")
+                            snippet = json.dumps(element, default=str, separators=(",", ":"))
+                            if len(snippet) > 300:
+                                snippet = snippet[:300] + "..."
+                            log_file.write(f"Error signature [{description}] matched: JSON {matched_pairs} {snippet}\n")
+                            logging.warning(f"Error signature [{description}] matched: JSON {matched_pairs} {snippet}")
                         if stop_on_fail_check:
                             critical_stop_descriptions.append(description)
                             stop_triggered = True
@@ -2808,9 +2858,54 @@ def log_analyzer(config, log_folder, no_stop=False, compare_good_log=False):
 
     return stop_triggered, [], log_analyzer_log_file
 
+def load_json_documents(file_path):
+    """Parse a JSON file that may hold one document, JSON Lines or a sequence
+    of concatenated / comma-separated objects.
+
+    Returns ``(data, error)``: ``data`` is the single document, or a list of
+    documents for multi-document files; ``error`` is a message when nothing
+    usable could be parsed (``data`` is then None).
+    """
+    import json
+
+    text = None
+    for encoding in ('utf-8-sig', 'latin-1'):
+        try:
+            with open(file_path, 'r', encoding=encoding) as handle:
+                text = handle.read()
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        return None, "unreadable file encoding"
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as first_error:
+        decoder = json.JSONDecoder()
+        documents, pos, length = [], 0, len(text)
+        while pos < length:
+            while pos < length and text[pos] in ' \t\r\n,[]':
+                pos += 1
+            if pos >= length:
+                break
+            try:
+                doc, pos = decoder.raw_decode(text, pos)
+            except json.JSONDecodeError as exc:
+                return None, f"invalid JSON ({exc.msg} at char {exc.pos}); first error: {first_error}"
+            documents.append(doc)
+        if not documents:
+            return None, f"invalid JSON ({first_error})"
+        return documents, None
+
+
 def analyze_json_file(file_path, signature, log_file):
     """
     Analyze a JSON file to match elements in arrays based on given conditions.
+
+    Accepts single-document JSON as well as JSON Lines / concatenated objects;
+    in the latter case every top-level object is checked. Returns
+    ``(matched_elements, error)`` where ``error`` is set when the file could not
+    be parsed at all.
     """
     import json
     import logging
@@ -2819,23 +2914,11 @@ def analyze_json_file(file_path, signature, log_file):
     whitelist_text = signature.get('whitelist_text', [])
     matched_elements = []
 
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            json_data = json.load(file)
-    except UnicodeDecodeError as e:
-        log_file.write(f"Error reading JSON file {file_path}: Encoding issue ({e}). Trying 'latin-1'.\n")
-        logging.warning(f"Error reading JSON file {file_path}: Encoding issue ({e}). Retrying with 'latin-1'.")
-        try:
-            with open(file_path, 'r', encoding='latin-1') as file:
-                json_data = json.load(file)
-        except (UnicodeDecodeError, json.JSONDecodeError) as inner_e:
-            log_file.write(f"Error reading JSON file {file_path} after retrying: {inner_e}\n")
-            logging.error(f"Error reading JSON file {file_path} after retrying: {inner_e}")
-            return matched_elements  # Return empty matched_elements to continue processing
-    except json.JSONDecodeError as e:
-        log_file.write(f"Error parsing JSON file {file_path}: Invalid JSON format ({e}).\n")
-        logging.error(f"Error parsing JSON file {file_path}: Invalid JSON format ({e}).")
-        return matched_elements  # Return empty matched_elements to continue processing
+    json_data, load_error = load_json_documents(file_path)
+    if load_error:
+        log_file.write(f"Error parsing JSON file {file_path}: {load_error}\n")
+        logging.error(f"Error parsing JSON file {file_path}: {load_error}")
+        return matched_elements, load_error
 
     def check_element(element):
         """Check if a JSON element matches error_text criteria and avoids whitelist_text."""
@@ -2878,7 +2961,7 @@ def analyze_json_file(file_path, signature, log_file):
                 traverse_json(value)
 
     traverse_json(json_data)
-    return matched_elements
+    return matched_elements, None
 
 
 
