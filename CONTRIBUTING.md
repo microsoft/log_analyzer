@@ -27,7 +27,7 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - Git
 
 ### Setting Up Your Environment

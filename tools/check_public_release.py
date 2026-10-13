@@ -35,6 +35,8 @@ BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".db", ".sqlite",
 
 # Microsoft open-source template files legitimately carry these addresses.
 ALLOWED_EMAILS = {"opencode@microsoft.com", "secure@microsoft.com", "cla@microsoft.com"}
+# Exact domains only (GitHub's privacy-preserving commit addresses).
+ALLOWED_EMAIL_DOMAINS = {"users.noreply.github.com"}
 # Public short links used by the Microsoft open-source template files.
 ALLOWED_SHORT_LINKS = {"aka.ms/security", "aka.ms/onboardsupport", "aka.ms/spot",
                        "aka.ms/opensource", "aka.ms/msrc"}
@@ -88,6 +90,16 @@ def candidate_files():
             and p.resolve() != LOCAL_DENYLIST.resolve()]
 
 
+def is_allowed(label, hit):
+    """True for well-known public values that the generic rules would flag."""
+    low = hit.lower()
+    if label == "e-mail address":
+        return low in ALLOWED_EMAILS or low.rpartition("@")[2] in ALLOWED_EMAIL_DOMAINS
+    if label == "internal URL":
+        return low in ALLOWED_SHORT_LINKS
+    return False
+
+
 def scan(paths, rules):
     findings = []
     for path in paths:
@@ -102,10 +114,7 @@ def scan(paths, rules):
             for label, pattern in rules:
                 for match in pattern.finditer(line):
                     hit = match.group(0)
-                    if label == "e-mail address" and (
-                            hit.lower() in ALLOWED_EMAILS or hit.lower().endswith("noreply.github.com")):
-                        continue
-                    if label == "internal URL" and hit.lower() in ALLOWED_SHORT_LINKS:
+                    if is_allowed(label, hit):
                         continue
                     if label == "credential value in JSON":
                         hit = hit.split(":")[0] + ': "<redacted>"'

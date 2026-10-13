@@ -37,6 +37,15 @@ def test_checker_ignores_safe_values():
     assert not _labels_for("version 10.0.20348")
 
 
+def test_email_allowlist_matches_exact_domain_only():
+    allowed = check_public_release.is_allowed
+    assert allowed("e-mail address", "1+bot@users.noreply.github.com")  # public-release: allow
+    assert not allowed("e-mail address", "x@users.noreply.github.com.example.org")  # public-release: allow
+    assert not allowed("e-mail address", "x@evilusers.noreply.github.com")  # public-release: allow
+    assert allowed("internal URL", "aka.ms/security")
+    assert not allowed("internal URL", "aka.ms/private-link")  # public-release: allow
+
+
 def test_only_sample_settings_are_tracked():
     out = subprocess.run(["git", "ls-files", "sut"], cwd=REPO_ROOT,
                          capture_output=True, text=True, check=True).stdout.split()
