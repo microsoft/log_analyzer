@@ -20,6 +20,8 @@ for which no input exists (and saying so - missing input is not a clean result):
   - Hardware errors from GPU, NIC, NVMe, DIMM and other device classes.
   - Sensors: temperatures, voltages, power, fans and cooling - out-of-range or missing readings.
   - Test and workload results: failed or aborted steps, power-cycle outcomes, test reports.
+  - OCP Test and Validation diagnostic output: the normalized *.ocptv.log files (one artifact per
+    line: run/step results, diagnoses, errors, measurements with compliant=false).
 
 Classify every finding as one of:
 

@@ -406,6 +406,7 @@ log_analyzer/sku_registry.local.json
 tools/public_release_denylist.local.txt
 sut/**/settings.*.json
 !sut/settings.sample.json
+!sut/settings.ocp_diag.json
 *.db
 *.bak*
 .DS_Store

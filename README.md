@@ -14,6 +14,17 @@ whitelists). It then writes text and HTML reports. On top of that deterministic 
 
 All AI features are optional. With `--no_ai` the tool is fully deterministic and needs no network access.
 
+### Supported log formats
+
+- Any line-oriented text log (dmesg, syslog, journal exports, exported event logs, test tool output, ...).
+- JSON documents, JSON Lines and concatenated JSON objects (`match_type: JSON`).
+- CSV and XML, optionally converted with `--to_csv`.
+- Diagnostic output following the
+  [OCP Test and Validation Output Specification](https://github.com/opencomputeproject/ocp-diag-core) v2.0, as JSON
+  Lines or in the indented, comma-separated variant some test harnesses write. See
+  [OCP diagnostic output](#ocp-diagnostic-output). Output from pre-2.0 (legacy) diagnostics is scanned as plain text
+  only.
+
 > **Note on decoders.** This repository contains **no** binary or vendor log decoders (for example BMC SEL, UEFI CPER
 > or BIOS POST-code decoders). Convert such logs to text with your own tools before scanning them.
 
@@ -61,9 +72,10 @@ python log_analyzer/log_analyzer.py --scan_folder <folder> --signature <name|pat
 | Option | Default | Description |
 |---|---|---|
 | `--scan_folder` | (required) | Folder to scan recursively |
-| `--signature` | (required) | `sample` loads `sut/settings.sample.json`; a bare name is searched recursively under `sut/`; a path to a JSON file also works |
+| `--signature` | (required) | `sample` loads `sut/settings.sample.json`; a bare name is searched recursively under `sut/`; a path to a JSON file also works. Combine packs with commas: `sample,ocp_diag` |
 | `--logpath` | scan folder | Where the tool's own run log is written |
 | `--to_csv` | `false` | Convert `.json` / `.xml` files to `.csv` before scanning |
+| `--ocp_diag` | `auto` | Normalize OCP diagnostic output and apply the `ocp_diag` pack: `auto` (when detected), `true` or `false` |
 | `--no_stop` | `true` | Do not stop on signatures marked `stop_on_fail_check` |
 | `--compare_good_log` | `true` | AI comparison against `good_log` baselines declared in signatures |
 | `--result_analyzer` | `false` | Build the consolidated multi-cycle test report (`result_analyzer.py`) |
@@ -75,8 +87,9 @@ python log_analyzer/log_analyzer.py --scan_folder <folder> --signature <name|pat
 
 ## Error signatures
 
-Signature packs live in `sut/settings.<name>.json`. Only `sut/settings.sample.json` is committed; every other
-`settings.*.json` under `sut/` is git-ignored so that your own packs stay private. Start by copying the sample:
+Signature packs live in `sut/settings.<name>.json`. Only the generic `sut/settings.sample.json` and
+`sut/settings.ocp_diag.json` are committed; every other `settings.*.json` under `sut/` is git-ignored so that your own
+packs stay private. Start by copying the sample:
 
 ```bash
 cp sut/settings.sample.json sut/settings.myplatform.json
@@ -94,14 +107,15 @@ A pack only needs an `error_signatures` list. Each entry supports:
 | `whitelist_text` | Terms that suppress a matched line |
 | `stop_on_fail_check` | `"true"` stops the run when the signature fails (unless `--no_stop`) |
 | `good_log` | Optional baseline file for good-log comparison |
+| `dedup_mode` | Optional per-signature summary mode (`exact`, `term`, `signature`, `fuzzy`); overrides the pack's `dedup_mode` |
 | `comment` | Free text |
 
 Match types:
 
 - **ERROR**: a line matches when any `error_text` term is present and no `whitelist_text` term is present (OR).
 - **PASS**: the signature fails when any `pass_text` term is missing from the matched file.
-- **JSON**: every key/value pair in `error_text` must match the same JSON record (AND). JSON matches are reported in
-  `log_analyzer_output.log`.
+- **JSON**: every key/value pair in `error_text` must match the same JSON record (AND). Works on single JSON documents,
+  JSON Lines and concatenated objects. A file that cannot be parsed is reported as a failed check, never as clean.
 
 ```json
 {
@@ -120,6 +134,36 @@ signature and lets you add whitelist terms, which it writes back with a backup:
 ```bash
 python log_analyzer/whitelist_review.py --scan_folder /path/to/logs --settings myplatform
 ```
+
+## OCP diagnostic output
+
+Diagnostics built on the OCP Test and Validation Output Specification v2.0 (for example with the reference
+[`ocptv` Python library](https://github.com/opencomputeproject/ocp-diag-core-python)) emit one JSON artifact per event.
+With `--ocp_diag auto` (the default), every `*.json` / `*.jsonl` file under the scan folder is checked. Each file that
+holds v2.0 output is normalized by `common/ocptv.py` into two files next to it:
+
+- `<name>.ocptv.log`: one self-contained line per artifact, with the run name, step name and hardware details
+  resolved, for the signature engine:
+
+  ```text
+  [OCPTV] FAIL artifact=diagnosis run=accel_diag step=0:bandwidth verdict=bw-low hw="accel0 (slot 3, SN1)" msg="below 40" seq=4 ts=...
+  [OCPTV] FAIL artifact=measurement run=accel_diag step=0:bandwidth name=bw value=12.5 unit=GB/s limit="GREATER_THAN_OR_EQUAL 40" compliant=false ...
+  ```
+
+- `<name>.ocptv.csv`: the same records with fixed columns, for spreadsheet review.
+
+The `ocp_diag` signature pack (`sut/settings.ocp_diag.json`) is then added automatically. It reports:
+
+| Severity | Finding |
+|---|---|
+| FAIL | `testRunEnd` result `FAIL`; run or step status `ERROR`; `diagnosis` type `FAIL`; any `error` artifact; `FATAL` log |
+| FAIL | Measurement or series element that violates its validators (evaluated by log_analyzer for all 10 validator types, even when the diagnostic emitted no diagnosis) |
+| FAIL | Output that is not valid JSON, or a run without `testRunEnd` (crashed, hung or truncated) |
+| WARN | `ERROR` log; `diagnosis` type `UNKNOWN`; skipped run or step |
+
+The final `testRunEnd` result is not enough on its own: a diagnostic can report `PASS` while logging errors or
+out-of-limit measurements, and the pack reports those separately. To silence a known finding, add its `verdict=`,
+`symptom=` or `name=` value to `whitelist_text`. Use `--ocp_diag false` to disable the step.
 
 ## Additional tools
 
@@ -196,10 +240,13 @@ log_analyzer/
 │   └── prompts/
 ├── common/
 │   ├── lib_log.py           # signature engine, good-log comparison, report helpers
+│   ├── ocptv.py             # OCP Test and Validation output normalizer
 │   ├── ai_backend.py        # Copilot CLI / custom CLI / HTTP configuration
 │   ├── brand.py             # report header and footer
 │   └── llm_config.json      # AI settings template
-├── sut/settings.sample.json # generic example signature pack
+├── sut/
+│   ├── settings.sample.json   # generic example signature pack
+│   └── settings.ocp_diag.json # OCP diagnostic output signatures
 ├── tools/check_public_release.py
 └── tests/
 ```

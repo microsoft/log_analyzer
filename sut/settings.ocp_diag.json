@@ -1,0 +1,104 @@
+{
+  "_comment": "Signatures for diagnostics that follow the OCP Test and Validation Output Specification v2.0. They match the normalized *.ocptv.log files written by --ocp_diag (common/ocptv.py), one artifact per line: '[OCPTV] <OUTCOME> artifact=<type> <state fields> run=... step=... <details> seq=... ts=...'. Descriptions start with the severity (FAIL: / WARN:). Whitelist individual findings by verdict=, symptom= or name= values.",
+  "dedup_mode": "exact",
+  "error_signatures": [
+    {
+      "description": "FAIL: OCP test run result FAIL",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] FAIL artifact=testRunEnd"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "testRunEnd.result is FAIL."
+    },
+    {
+      "description": "FAIL: OCP run or step ended with status ERROR",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] ERROR artifact=testRunEnd", "[OCPTV] ERROR artifact=testStepEnd"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "The diagnostic itself did not complete (testRunEnd/testStepEnd status ERROR)."
+    },
+    {
+      "description": "FAIL: OCP diagnosis FAIL",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] FAIL artifact=diagnosis"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "One line per failing verdict and hardware component."
+    },
+    {
+      "description": "FAIL: OCP error artifact",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] ERROR artifact=error"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "Software or execution error reported by the diagnostic (error.symptom)."
+    },
+    {
+      "description": "FAIL: OCP FATAL log",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["artifact=log severity=FATAL"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "Log artifacts with severity FATAL."
+    },
+    {
+      "description": "FAIL: OCP measurement outside limits",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] FAIL artifact=measurement"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "Measurement or measurement-series element that violates its validators, evaluated by log_analyzer even when the diagnostic emitted no diagnosis."
+    },
+    {
+      "description": "FAIL: OCP output unreadable",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] ERROR artifact=parse"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "Fragments of the diagnostic output that are not valid JSON (truncated or corrupted output)."
+    },
+    {
+      "description": "WARN: OCP ERROR log",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["artifact=log severity=ERROR"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "Log artifacts with severity ERROR. A run can still report PASS while logging these."
+    },
+    {
+      "description": "WARN: OCP diagnosis UNKNOWN or skipped run/step",
+      "match_type": "ERROR",
+      "file": "*.ocptv.log",
+      "error_text": ["[OCPTV] UNKNOWN artifact=diagnosis", "[OCPTV] SKIP artifact=testRunEnd", "[OCPTV] SKIP artifact=testStepEnd"],
+      "whitelist_text": [],
+      "dedup_mode": "exact",
+      "stop_on_fail_check": "false",
+      "comment": "Inconclusive diagnosis, or a run/step that was skipped or not applicable."
+    },
+    {
+      "description": "FAIL: OCP test run did not finish",
+      "match_type": "PASS",
+      "file": "*.ocptv.log",
+      "pass_text": ["artifact=testRunEnd"],
+      "stop_on_fail_check": "false",
+      "comment": "Every complete run ends with testRunEnd. A missing one means the diagnostic crashed, hung or its output was truncated."
+    }
+  ]
+}
