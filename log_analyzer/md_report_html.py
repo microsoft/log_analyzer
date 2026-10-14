@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Render the AI deep-analysis markdown deliverables as standalone HTML.
 
 The signature engine already emits .html, but the LLM-written reports

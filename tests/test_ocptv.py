@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for OCP Test and Validation (spec v2.0) diagnostic output support."""
 
 import json

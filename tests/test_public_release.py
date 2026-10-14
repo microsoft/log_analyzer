@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Guardrails that keep private data out of this public repository."""
 
 import re
@@ -44,6 +46,18 @@ def test_email_allowlist_matches_exact_domain_only():
     assert not allowed("e-mail address", "x@evilusers.noreply.github.com")  # public-release: allow
     assert allowed("internal URL", "aka.ms/security")
     assert not allowed("internal URL", "aka.ms/private-link")  # public-release: allow
+
+
+def test_python_files_have_copyright_header():
+    out = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.py"],
+                         cwd=REPO_ROOT, capture_output=True, text=True, check=True).stdout.split()
+    missing = []
+    for rel in out:
+        head = (REPO_ROOT / rel).read_text(encoding="utf-8").splitlines()[:3]
+        if "# Copyright (c) Microsoft Corporation." not in head \
+                or "# Licensed under the MIT License." not in head:
+            missing.append(rel)
+    assert missing == []
 
 
 def test_only_public_settings_are_tracked():

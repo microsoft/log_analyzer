@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Render the markdown an LLM actually emits into HTML for the log_analyzer reports.
 
 The models already return clean markdown. The reports were throwing it away:

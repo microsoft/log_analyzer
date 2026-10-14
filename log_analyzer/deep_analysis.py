@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Deep AI analysis of one log folder.
 
 This is deliberately the opposite of result_analyzer.py:

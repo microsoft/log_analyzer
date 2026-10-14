@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Digest sensor-analysis workbooks into one reviewable HTML page.
 
 Sensor-analysis workbooks are large (tens of MB, dozens of sheets) so nobody
