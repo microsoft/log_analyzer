@@ -1862,8 +1862,8 @@ class LogAnalyzer:
                 "</p>"
             )
         else:
-            ai_html = ("<p><strong>AI analysis:</strong> disabled "
-                       "(<code>--no_llm</code>) &mdash; every status shown was read "
+            ai_html = ("<p><strong>AI analysis:</strong> off (enable with "
+                       "<code>--ai</code>) &mdash; every status shown was read "
                        "deterministically from the log's own verdict field.</p>")
 
         if partial:
@@ -2469,7 +2469,8 @@ class LogAnalyzer:
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(brand.brandify(
-                    html_content, "Test Suite Analysis"))
+                    html_content, "Test Suite Analysis",
+                    ai_generated=bool(ai_sent)))
             logger.info(f"HTML report generated successfully: {output_path}")
         except Exception as e:
             logger.error(f"Error writing HTML report: {e}")
@@ -2483,16 +2484,20 @@ def main():
         epilog="""
 Examples:
   python result_analyzer.py --input_logpath /path/to/logs
-  python result_analyzer.py --input_logpath /path/to/logs --output report.html --workers 8
-  python result_analyzer.py --input_logpath /path/to/logs --ai_url http://localhost:11434
-  python result_analyzer.py --input_logpath /path/to/logs --no_llm
+  python result_analyzer.py --input_logpath /path/to/logs --ai --output report.html --workers 8
+  python result_analyzer.py --input_logpath /path/to/logs --ai --ai_url http://localhost:11434
+
+AI is off by default: without --ai (or LOG_ANALYZER_AI=1) the report is built
+from deterministic parsing only. AI-written text in the report is labelled
+"AI-generated, may be inaccurate, verify against the log evidence."
 
 AI backends (see common/ai_backend.py and common/llm_config.json):
-  By default the configured AI CLI is used (LOG_ANALYZER_AI_CLI=none disables it).
+  With --ai the configured AI CLI is used (LOG_ANALYZER_AI_CLI=none disables it).
   An OpenAI-compatible HTTP LLM endpoint is used only when explicitly
   configured (--ai_url, LOG_ANALYZER_AI_URL, or ai_backend "http").
 
 Environment variables:
+  LOG_ANALYZER_AI                         1 enables AI analysis (same as --ai)
   LOG_ANALYZER_AI_URL                     HTTP LLM endpoint base URL (opts into HTTP)
   LOG_ANALYZER_AI_MODEL                   Model name for the HTTP LLM endpoint
   LOG_ANALYZER_AI_CLI                     AI CLI type: copilot | custom | none
@@ -2565,9 +2570,15 @@ Environment variables:
     )
     
     parser.add_argument(
+        '--ai',
+        action='store_true',
+        help='Enable LLM analysis (off by default; LOG_ANALYZER_AI=1 also enables it)'
+    )
+
+    parser.add_argument(
         '--no_llm',
         action='store_true',
-        help='Skip LLM analysis (faster, but less insightful)'
+        help='Force LLM analysis off, overriding --ai and LOG_ANALYZER_AI'
     )
     
     parser.add_argument(
@@ -2583,8 +2594,8 @@ Environment variables:
     )
     
     args = parser.parse_args()
+    args.no_llm = args.no_llm or not ai_backend.ai_enabled(args.ai)
     
-    # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
@@ -2630,7 +2641,7 @@ Environment variables:
     if args.no_llm:
         analyzer.ai_enabled = False
         analyzer.call_llm_api = lambda content, context, analysis_type='full': (
-            "" if analysis_type == "status" else "LLM analysis disabled (--no_llm flag)"
+            "" if analysis_type == "status" else "AI analysis off (enable with --ai)"
         )
     
     # Perform analysis

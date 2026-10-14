@@ -24,6 +24,11 @@ def convert_log_to_html(log_path):
         with open(log_path, "r", encoding="utf-8", errors="replace") as log_file:
             lines = log_file.readlines()
 
+        # Logs written from AI output carry the AI notice; surface it visibly.
+        ai_notice = ""
+        if any(ai_backend.AI_NOTICE in line for line in lines[:200]):
+            ai_notice = getattr(brand, "ai_notice_html", lambda: "")()
+
         with open(html_path, "w", encoding="utf-8") as html_file:
             html_file.write(f"""<!DOCTYPE html>
 <html>
@@ -44,6 +49,7 @@ def convert_log_to_html(log_path):
 </head>
 <body>
 {brand.brand_banner("Log Viewer", os.path.basename(log_path))}
+{ai_notice}
 <pre>
 """)
 
@@ -155,7 +161,7 @@ def create_parser():
         "--ado_search",
         type=_bool_arg,
         default=False,
-        help="Match findings against Azure DevOps bugs through the AI CLI (default: false). Pass 'true' to enable."
+        help="Match findings against known issues through the AI CLI (default: false). Pass 'true' to enable; requires --ai."
     )
     optional_group.add_argument(
         "--to_csv",
@@ -183,7 +189,7 @@ def create_parser():
         "--compare_good_log",
         type=_bool_arg,
         default=True,
-        help="Enable LLM-based good log comparison analysis when good_log paths are specified in error signatures (default: true). Pass 'false' to disable."
+        help="LLM-based comparison against good_log baselines declared in error signatures (default: true). Only runs with --ai. Pass 'false' to disable."
     )
     optional_group.add_argument(
         "--result_analyzer",
@@ -197,7 +203,7 @@ def create_parser():
         default=False,
         help=(
             "Compare collector output files, workload/tool folders and sensor CSVs across "
-            "cycles (default: false); changed targets may be explained by the configured AI backend."
+            "cycles (default: false); with --ai, changed targets are also explained by the AI backend."
         )
     )
     optional_group.add_argument(
@@ -206,13 +212,23 @@ def create_parser():
         default=False,
         help=(
             "Run the agentic deep analysis (deep_analysis.py) as the last step (default: false). "
-            "Pass 'true' or set LOG_ANALYZER_DEEP=1 to enable. Skipped with --no_ai."
+            "Pass 'true' or set LOG_ANALYZER_DEEP=1 to enable; requires --ai."
+        )
+    )
+    optional_group.add_argument(
+        "--ai",
+        action="store_true",
+        help=(
+            "Enable AI analysis: LLM summary of findings, good-log comparison, AI explanations "
+            "in the test report and cycle diff, and the opt-in deep analysis / known-issue "
+            "match. Off by default; LOG_ANALYZER_AI=1 also enables it. AI output is labelled "
+            "'AI-generated, may be inaccurate, verify against the log evidence.'"
         )
     )
     optional_group.add_argument(
         "--no_ai",
         action="store_true",
-        help="Disable all LLM/AI CLI analysis (deterministic signature scan only)."
+        help="Force AI analysis off, overriding --ai and LOG_ANALYZER_AI (AI is off by default)."
     )
     optional_group.add_argument(
         "--version",
@@ -738,7 +754,7 @@ def run_deep_analysis(args):
         logging.info("Deep analysis not requested (enable with --deep_analysis true or LOG_ANALYZER_DEEP=1).")
         return
     if args.no_ai:
-        logging.info("AI analysis disabled by --no_ai; skipping deep analysis.")
+        logging.info("AI analysis is off; skipping deep analysis (enable with --ai).")
         return
     deep_script = script_dir / "deep_analysis.py"
     if not deep_script.exists():
@@ -778,12 +794,18 @@ def main():
         sys.exit(0)
     
     args = parse_args()
+    # AI is opt-in. From here on args.no_ai is the single switch every step checks.
+    args.no_ai = args.no_ai or not ai_backend.ai_enabled(args.ai)
     
     result = create_testlog("LOG_ANALYZER", logpath=args.scan_folder)
     if result is None:
         print("Error creating log, exiting...")
         sys.exit(1)
     timestamp, log_file_path, log_folder, log_filename = result
+    if args.no_ai:
+        logging.info("AI analysis is off (default). Enable it with --ai or LOG_ANALYZER_AI=1.")
+    else:
+        logging.info(f"AI analysis is on. AI output is labelled: {ai_backend.AI_NOTICE}")
 
     config = read_config_m(args.signature)
     detection = prepare_platform_analysis(args, config)
@@ -811,7 +833,7 @@ def main():
             categorize_matched_lines_ado(args.scan_folder)
         else:
             if args.ado_search:
-                logging.info("AI analysis disabled by --no_ai; skipping ADO search.")
+                logging.info("AI analysis is off; skipping known-issue search (enable with --ai).")
             logging.info("Log analysis without ADO search...")
             categorize_matched_lines(args.scan_folder)
             
@@ -873,7 +895,7 @@ def main():
         except Exception as _e:
             logging.warning(f"Could not evaluate summary source size: {_e}")
         if args.no_ai:
-            logging.info("AI analysis disabled by --no_ai; skipping error-signature LLM summary.")
+            logging.info("AI analysis is off; skipping the error-signature LLM summary.")
         elif os.path.exists(summary_source_path):
             logging.info("Sending error signatures to LLM for summary analysis...")
             summary_json_output = os.path.join(args.scan_folder, "error_signatures_summary.json")
@@ -912,7 +934,7 @@ def main():
         # cross-cycle AI deep-dive. If an outer caller enforces a total time
         # budget, running result_analyzer first guarantees the pass/fail report
         # exists regardless of how long cycle_diff takes or whether it times out.
-        # With --no_ai, result_analyzer still runs in deterministic mode
+        # Without AI, result_analyzer still runs in deterministic mode
         # (--no_llm): the workload verdicts are pure parsing and cost no LLM
         # calls, so a pass/fail report exists after every run.
         if args.result_analyzer:
@@ -940,9 +962,11 @@ def main():
                     if args.no_ai:
                         cmd.append("--no_llm")
                         logging.info(
-                            "--no_ai set: running result_analyzer in deterministic "
+                            "AI off: running result_analyzer in deterministic "
                             "mode (--no_llm). Workload verdicts are still parsed."
                         )
+                    else:
+                        cmd.append("--ai")
                     
                     logging.info(f"Running result_analyzer.py with input_logpath: {args.scan_folder}")
                     logging.info(f"Command: {' '.join(cmd)}")
@@ -972,6 +996,8 @@ def main():
             ]
             if args.no_ai:
                 cycle_diff_command.append("--no_ai")
+            else:
+                cycle_diff_command.append("--ai")
             try:
                 logging.info("Starting cross-cycle log comparison...")
                 _cd_to = int(os.getenv("LOG_ANALYZER_CYCLE_DIFF_TIMEOUT", "1800"))

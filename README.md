@@ -12,7 +12,9 @@ whitelists). It then writes text and HTML reports. On top of that deterministic 
 - run an agentic "deep analysis" of the whole folder,
 - match findings against your issue tracker through an AI CLI.
 
-All AI features are optional. With `--no_ai` the tool is fully deterministic and needs no network access.
+AI is **off by default**: without `--ai` (or `LOG_ANALYZER_AI=1`) the tool is fully deterministic and needs no network
+access. Everything an AI backend writes into a report is labelled
+**"AI-generated, may be inaccurate, verify against the log evidence."**
 
 ### Supported log formats
 
@@ -46,8 +48,11 @@ git clone https://github.com/microsoft/log_analyzer.git
 cd log_analyzer
 pip install -r requirements.txt
 
-# Deterministic scan with the generic sample signatures
-python log_analyzer/log_analyzer.py --scan_folder /path/to/logs --signature sample --no_ai
+# Deterministic scan with the generic sample signatures (AI is off by default)
+python log_analyzer/log_analyzer.py --scan_folder /path/to/logs --signature sample
+
+# Same scan plus AI summary of the findings (needs an AI backend, see "AI backends")
+python log_analyzer/log_analyzer.py --scan_folder /path/to/logs --signature sample --ai
 ```
 
 Reports are written into the scanned folder:
@@ -77,12 +82,13 @@ python log_analyzer/log_analyzer.py --scan_folder <folder> --signature <name|pat
 | `--to_csv` | `false` | Convert `.json` / `.xml` files to `.csv` before scanning |
 | `--ocp_diag` | `auto` | Normalize OCP diagnostic output and apply the `ocp_diag` pack: `auto` (when detected), `true` or `false` |
 | `--no_stop` | `true` | Do not stop on signatures marked `stop_on_fail_check` |
-| `--compare_good_log` | `true` | AI comparison against `good_log` baselines declared in signatures |
+| `--compare_good_log` | `true` | AI comparison against `good_log` baselines declared in signatures (only with `--ai`) |
 | `--result_analyzer` | `false` | Build the consolidated multi-cycle test report (`result_analyzer.py`) |
 | `--cycle_diff` | `false` | Diff the same log files across cycle folders (`cycle_diff_analyzer.py`) |
-| `--deep_analysis` | `false` | Run the agentic deep analysis (`deep_analysis.py`) as the last step |
-| `--ado_search` | `false` | Match findings against known issues through the AI CLI (`ado_match_ai.py`) |
-| `--no_ai` | off | Disable every AI call |
+| `--deep_analysis` | `false` | Run the agentic deep analysis (`deep_analysis.py`) as the last step (needs `--ai`) |
+| `--ado_search` | `false` | Match findings against known issues through the AI CLI (`ado_match_ai.py`, needs `--ai`) |
+| `--ai` | off | Enable AI analysis (also `LOG_ANALYZER_AI=1`) |
+| `--no_ai` | off | Force AI off, overriding `--ai` and `LOG_ANALYZER_AI` |
 | `--version` | | Print the version and exit |
 
 ## Error signatures
@@ -189,16 +195,30 @@ is configured. Set `LOG_ANALYZER_PLATFORM` to force a platform instead of auto-d
 
 ## AI backends
 
+AI analysis is opt-in. `log_analyzer.py`, `result_analyzer.py` and `cycle_diff_analyzer.py` call an AI backend only
+when you pass `--ai` or set `LOG_ANALYZER_AI=1`. `deep_analysis.py` and `ado_match_ai.py` exist only to run an AI
+pass, so running them directly is the opt-in.
+
+When AI is on, these outputs carry the notice **"AI-generated, may be inaccurate, verify against the log evidence."**:
+
+- the summary of findings (`error_signatures_summary.*`);
+- good-log comparisons (`good_log_analysis_*`);
+- AI columns in the test report and the cross-cycle diff;
+- `deep_analysis.html`, `ado_match_result.*`, and the HTML rendered from the AI markdown deliverables.
+
+Treat AI output as a lead to check, never as a verdict.
+
 AI settings live in `common/llm_config.json`. Copy it to the git-ignored `common/llm_config.local.json` for private
 values such as your own endpoint. Environment variables override both files.
 
 | Setting | Environment variable | Meaning |
 |---|---|---|
+| | `LOG_ANALYZER_AI` | `1` enables AI analysis (same as `--ai`) |
 | `ai_backend` | `LOG_ANALYZER_AI_BACKEND` | `cli` (default) or `http` |
 | `ai_cli.type` | `LOG_ANALYZER_AI_CLI` | `copilot` (default), `custom` or `none` |
 | `ai_cli.model` | | Model passed to the AI CLI (`auto` by default) |
 | `ai_cli.copilot_args` | | Extra Copilot CLI arguments (default `--allow-all-tools --no-ask-user`) |
-| `ai_cli.custom_command` | | Command for any other AI CLI, see below |
+| `ai_cli.custom_command` | `LOG_ANALYZER_AI_CLI_COMMAND` | Command for any other AI CLI (env value: a JSON list), see below |
 | `api_url` | `LOG_ANALYZER_AI_URL` | OpenAI-compatible endpoint; setting the variable opts into HTTP |
 | `model` | `LOG_ANALYZER_AI_MODEL` | Model name for the HTTP endpoint |
 | | `LOG_ANALYZER_COPILOT_EXE` | Explicit path to the Copilot CLI executable |
@@ -219,8 +239,8 @@ script's `--help` for the full list.
 
 ### Security considerations
 
-- Log content is sent to the AI backend you configure. Use `--no_ai` when logs must not leave the machine. If you
-  must use AI on sensitive logs, choose a local HTTP endpoint.
+- Log content is sent to the AI backend you configure, and only when AI is enabled. Leave AI off (the default) when
+  logs must not leave the machine. If you must use AI on sensitive logs, choose a local HTTP endpoint.
 - `result_analyzer.py` redacts simple credential patterns before sending results. The other AI features send log
   excerpts as they are, so review what your logs contain.
 - Unattended agentic runs need tool approval up front. The default Copilot arguments
