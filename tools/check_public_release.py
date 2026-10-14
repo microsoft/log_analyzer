@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Pre-publish leak check for this repository.
 
 Scans every tracked and untracked (non-ignored) text file for data that must

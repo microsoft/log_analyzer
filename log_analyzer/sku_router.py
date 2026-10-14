@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Decide which platform a log folder belongs to, and which knowledge sources serve it.
 
 The platform -> knowledge source mapping lives in ``sku_registry.json``

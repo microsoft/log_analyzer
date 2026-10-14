@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Known-issue matching for error signatures, via the platform's issue source.
 
 The error signatures of one run are handed to the configured AI CLI, which

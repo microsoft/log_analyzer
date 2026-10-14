@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 whitelist_review.py — Interactive HTML reviewer for log_analyzer error-signature
 matches. Browse a scanned log folder, see every error-signature match attributed

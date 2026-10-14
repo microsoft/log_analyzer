@@ -11,6 +11,16 @@ We welcome contributions in the form of:
 - **Code contributions** - Submit pull requests with bug fixes or new features
 - **Documentation improvements** - Help improve our docs and examples
 
+## Contributor License Agreement
+
+This project welcomes contributions and suggestions. Most contributions require you to agree to a Contributor License
+Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution.
+For details, visit https://cla.opensource.microsoft.com.
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide a CLA and decorate
+the PR appropriately (e.g., status check, comment). Simply follow the instructions provided by the bot. You will only
+need to do this once across all repositories using our CLA.
+
 ## Code of Conduct
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information, see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any questions or comments.
@@ -53,6 +63,13 @@ pip install -r requirements.txt
 ## Coding Guidelines
 
 ### Python Style
+
+- Start every source file with the MIT copyright header:
+
+  ```python
+  # Copyright (c) Microsoft Corporation.
+  # Licensed under the MIT License.
+  ```
 
 - Follow [PEP 8](https://pep8.org/) style guidelines
 - Use 4 spaces for indentation (no tabs)

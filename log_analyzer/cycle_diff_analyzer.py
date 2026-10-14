@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Compare same-identity log files across consecutive test-cycle folders.
 
 For every cycle folder (see ``CYCLE_FOLDER_RE``) the tool collects:

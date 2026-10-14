@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 from rapidfuzz import fuzz as _rapidfuzz
 from pathlib import Path
 

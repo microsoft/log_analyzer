@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Neutral header/footer styling shared by every HTML report log_analyzer writes.
 
 Stdlib-only and import-safe: report generation must never fail because the

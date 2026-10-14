@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Normalize OCP Test and Validation diagnostic output into line-based records.
 
 Diagnostics that follow the OCP Test and Validation Output Specification v2.0

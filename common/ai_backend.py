@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Pluggable AI backends for log_analyzer.
 
 Two families of backend are supported:
