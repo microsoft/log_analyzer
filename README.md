@@ -293,6 +293,11 @@ For details, visit <https://cla.opensource.microsoft.com>. See [CONTRIBUTING.md]
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 
+## Reporting security issues
+
+Please do not report security vulnerabilities through public GitHub issues. Follow the instructions in
+[SECURITY.md](SECURITY.md) instead.
+
 ## Trademarks
 
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
