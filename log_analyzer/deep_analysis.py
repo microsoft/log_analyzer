@@ -147,6 +147,7 @@ def run_deep_analysis(scan_folder: Path, model: str, timeout: int, signature=Non
     ) or ""
 
     if output_path.exists() and output_path.stat().st_size > 0:
+        _stamp_ai_notice(output_path)
         logger.info("Deep analysis written to %s (%d bytes)",
                     output_path, output_path.stat().st_size)
         return True
@@ -162,10 +163,20 @@ def run_deep_analysis(scan_folder: Path, model: str, timeout: int, signature=Non
             folder=html.escape(str(scan_folder)),
             ts=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
             body=html.escape(text),
-        ), TOOL_TITLE, str(scan_folder)),
+        ), TOOL_TITLE, str(scan_folder), ai_generated=True),
         encoding="utf-8",
     )
     return True
+
+
+def _stamp_ai_notice(path: Path):
+    """Label an agent-written report as AI output (idempotent)."""
+    try:
+        page = path.read_text(encoding="utf-8", errors="replace")
+        path.write_text(brand.brandify(page, TOOL_TITLE, ai_generated=True),
+                        encoding="utf-8")
+    except Exception as exc:                             # cosmetic; never fail the run
+        logger.warning("Could not add the AI notice to %s: %s", path, exc)
 
 
 def main():

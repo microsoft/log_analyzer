@@ -126,6 +126,27 @@ except Exception:                                        # pragma: no cover
         brand_chip = brand_banner = brand_footer = _nil
 
 
+def _ai_opted_in(flag=False):
+    """AI is opt-in: --ai or LOG_ANALYZER_AI=1 (same rule as common/ai_backend.py)."""
+    try:
+        import ai_backend
+        return ai_backend.ai_enabled(flag)
+    except Exception:
+        return bool(flag) or os.getenv("LOG_ANALYZER_AI", "").strip().lower() in (
+            "1", "true", "yes", "on")
+
+
+def brand_ai_notice():
+    return getattr(brand, "AI_NOTICE",
+                   "AI-generated, may be inaccurate, verify against the log evidence.")
+
+
+def _has_ai_text(report: Dict) -> bool:
+    """True when any AI-written assessment is shown in the report."""
+    return any(g.get("ai_compared") and g.get("ai_analysis")
+               for g in (report.get("groups") or {}).values())
+
+
 def glob_to_regex(pattern: str) -> Optional["re.Pattern"]:
     """Convert a settings file glob (e.g. dmesg*serialized.log) to a basename regex."""
     pattern = (pattern or "").strip().replace("\\", "/")
@@ -403,7 +424,7 @@ def summarize_transition(previous: Dict, current: Dict) -> Dict:
 
 
 class CycleDiffAnalyzer:
-    def __init__(self, scan_folder: str, use_ai: bool = True, max_ai_groups: int = DEFAULT_AI_BUDGET,
+    def __init__(self, scan_folder: str, use_ai: bool = False, max_ai_groups: int = DEFAULT_AI_BUDGET,
                  settings_path: Optional[str] = None,
                  file_patterns: Optional[List[Tuple[str, str]]] = None,
                  collector_prefixes: Optional[Tuple[str, ...]] = None):
@@ -721,6 +742,8 @@ class CycleDiffAnalyzer:
             "interested_pattern_count": len(self.interested_patterns),
             "groups": groups,
         }
+        if _has_ai_text(report):
+            report["ai_notice"] = brand_ai_notice()
         self.write_reports(report)
         return report
 
@@ -752,7 +775,7 @@ class CycleDiffAnalyzer:
                 analysis_class = ""
                 analysis_is_html = True
             elif not report["ai_enabled"]:
-                analysis = "AI disabled for this run (--no_ai)."
+                analysis = "AI off for this run (enable with --ai)."
                 analysis_class = "ai-note"
                 analysis_is_html = False
             elif report.get("ai_unavailable_reason"):
@@ -913,7 +936,8 @@ class CycleDiffAnalyzer:
                 "<th>Interested</th><th>AI compared</th><th>Deterministic diff</th>"
                 "<th>AI assessment</th></tr></thead><tbody>"
                 + "".join(rows) + "</tbody></table>" + script + "</body></html>",
-                "Cross-cycle Diff"),
+                "Cross-cycle Diff",
+                ai_generated=_has_ai_text(report)),
             encoding="utf-8",
         )
         logger.info("Cross-cycle reports written to %s and %s", json_path, html_path)
@@ -924,8 +948,11 @@ def main() -> int:
         description="Compare same-identity log files across consecutive test-cycle folders")
     parser.add_argument("--scan_folder", required=True,
                         help="Run folder containing one sub-folder per test cycle.")
+    parser.add_argument("--ai", action="store_true",
+                        help="Let the AI backend explain changed files (off by default; "
+                             "LOG_ANALYZER_AI=1 also enables it).")
     parser.add_argument("--no_ai", action="store_true",
-                        help="Deterministic diff only; do not call an AI backend.")
+                        help="Deterministic diff only, overriding --ai and LOG_ANALYZER_AI.")
     parser.add_argument("--max_ai_groups", type=int, default=DEFAULT_AI_BUDGET,
                         help="Total number of log files to AI-compare across cycles (budget).")
     parser.add_argument("--settings", default=None,
@@ -953,8 +980,9 @@ def main() -> int:
         analyzer.write_reports(report)
         logger.info("Re-rendered HTML from %s (no LLM calls)", json_path)
         return 0
+    use_ai = not args.no_ai and _ai_opted_in(args.ai)
     report = CycleDiffAnalyzer(
-        args.scan_folder, not args.no_ai, args.max_ai_groups, settings_path=args.settings,
+        args.scan_folder, use_ai, args.max_ai_groups, settings_path=args.settings,
         file_patterns=file_patterns, collector_prefixes=collector_prefixes,
     ).run()
     if len(report["cycles"]) < 2:

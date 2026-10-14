@@ -18,8 +18,11 @@ Configuration precedence (highest first):
 3. ``common/llm_config.json`` (committed template)
 4. Built-in defaults
 
-Every call site treats AI as optional: when no backend is available the
-analysis still completes and simply omits the AI sections.
+AI analysis is opt-in: entry points only use a backend when the user passes
+``--ai`` or sets ``LOG_ANALYZER_AI=1`` (see ``ai_enabled``). Every call site
+treats AI as optional: when no backend is available the analysis still
+completes and simply omits the AI sections. Text an AI backend produces is
+labelled with ``AI_NOTICE`` in the reports.
 """
 
 from __future__ import annotations
@@ -57,6 +60,16 @@ DEFAULT_CONFIG = {
 }
 
 READY_MARKER = "LOG_ANALYZER_BACKEND_READY"
+
+# Shown on every report section written by an AI backend.
+AI_NOTICE = "AI-generated, may be inaccurate, verify against the log evidence."
+
+
+def ai_enabled(flag=False):
+    """AI analysis is opt-in: True only for an explicit flag or LOG_ANALYZER_AI=1."""
+    if flag:
+        return True
+    return os.getenv("LOG_ANALYZER_AI", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 class AIBackendUnavailable(RuntimeError):
@@ -101,6 +114,14 @@ def load_llm_config() -> dict:
         cfg["ai_backend"] = env["LOG_ANALYZER_AI_BACKEND"].strip().lower()
     if env.get("LOG_ANALYZER_AI_CLI"):
         cfg["ai_cli"]["type"] = env["LOG_ANALYZER_AI_CLI"].strip().lower()
+    if env.get("LOG_ANALYZER_AI_CLI_COMMAND"):
+        # JSON list, same format as ai_cli.custom_command.
+        try:
+            command = json.loads(env["LOG_ANALYZER_AI_CLI_COMMAND"])
+            if isinstance(command, list):
+                cfg["ai_cli"]["custom_command"] = [str(part) for part in command]
+        except ValueError:
+            pass
     return cfg
 
 

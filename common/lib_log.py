@@ -25,6 +25,8 @@ except Exception:                                        # pragma: no cover
 
 import ai_backend
 
+AI_NOTICE = ai_backend.AI_NOTICE
+
 from typing import List, Union, Dict
 from typing import Optional
 from typing import Tuple
@@ -427,8 +429,8 @@ def send_summary_to_ollama(log_file_path,
                      f"{clean_text_for_logging(summary_text)}")
         try:
             with open(json_output_path, 'w', encoding='utf-8') as jf:
-                json.dump({"summary_response": summary_text}, jf, indent=2,
-                          ensure_ascii=False)
+                json.dump({"summary_response": summary_text, "ai_notice": AI_NOTICE}, jf,
+                          indent=2, ensure_ascii=False)
         except Exception as e:
             logging.error(f"Failed writing JSON output: {e}")
         if analysis_output_path:
@@ -443,6 +445,7 @@ def send_summary_to_ollama(log_file_path,
                     af.write("\n\n" + "=" * 60 + "\n")
                     af.write("COMPREHENSIVE SUMMARY ANALYSIS:\n")
                     af.write("=" * 60 + "\n\n")
+                    af.write(f"NOTE: {AI_NOTICE}\n\n")
                     af.write(summary_text)
                     af.write("\n\n" + "=" * 60 + "\n")
                     af.write("==== END OF SUMMARY ANALYSIS ====\n")
@@ -502,7 +505,7 @@ def send_summary_to_ollama(log_file_path,
             # Write JSON output file (always a stable structure)
             try:
                 with open(json_output_path, 'w', encoding='utf-8') as jf:
-                    json.dump({"summary_response": summary_text}, jf, indent=2, ensure_ascii=False)
+                    json.dump({"summary_response": summary_text, "ai_notice": AI_NOTICE}, jf, indent=2, ensure_ascii=False)
             except Exception as e:
                 logging.error(f"Failed writing JSON output: {e}")
 
@@ -519,6 +522,7 @@ def send_summary_to_ollama(log_file_path,
                         af.write("\n\n" + "=" * 60 + "\n")
                         af.write("COMPREHENSIVE SUMMARY ANALYSIS:\n")
                         af.write("=" * 60 + "\n\n")
+                        af.write(f"NOTE: {AI_NOTICE}\n\n")
                         af.write(summary_text)
                         af.write("\n\n" + "=" * 60 + "\n")
                         af.write("==== END OF SUMMARY ANALYSIS ====\n")
@@ -2541,7 +2545,7 @@ def create_good_log_analysis_summary(scan_folder, analysis_results_list):
 </html>"""
 
     with open(summary_file_path, 'w', encoding='utf-8') as f:
-        f.write(brand.brandify(html_content, "Good Log Analysis"))
+        f.write(brand.brandify(html_content, "Good Log Analysis", ai_generated=True))
     
     logging.info(f"Enhanced good log analysis summary created: {summary_file_path}")
     logging.info(f"Summary includes inline issue details for {total_issues} files with real issues")
@@ -2668,6 +2672,7 @@ def log_analyzer(config, log_folder, no_stop=False, compare_good_log=False):
                             analysis_file.write(f"=" * 60 + "\n")
                             analysis_file.write(f"LLM COMPARISON ANALYSIS:\n")
                             analysis_file.write(f"=" * 60 + "\n")
+                            analysis_file.write(f"NOTE: {AI_NOTICE}\n\n")
                             analysis_file.write(f"{llm_response}\n")
                         
                         log_file.write(f"LLM comparison analysis completed (saved to {analysis_filename})\n")

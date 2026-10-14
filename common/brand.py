@@ -22,7 +22,7 @@ from pathlib import Path
 __all__ = [
     "PRODUCT", "logo_data_uri", "favicon_tag", "page_title", "version",
     "brand_css", "brand_chip", "brand_banner", "brand_footer", "head_tags",
-    "brandify", "write_branded",
+    "brandify", "write_branded", "AI_NOTICE", "ai_notice_html", "add_ai_notice",
 ]
 
 PRODUCT = "Log Analyzer"
@@ -137,13 +137,46 @@ def head_tags(tool: str = "", with_css: bool = True) -> str:
 
 
 _MARK = "<!--log-analyzer-branded-->"
+_AI_MARK = "<!--log-analyzer-ai-notice-->"
+
+# Kept in sync with ai_backend.AI_NOTICE; duplicated so this module stays
+# import-safe without the AI configuration.
+AI_NOTICE = "AI-generated, may be inaccurate, verify against the log evidence."
+
+
+def ai_notice_html() -> str:
+    """Visible notice for report sections produced by an AI backend."""
+    return (_AI_MARK + '<div class="la-ai-notice" role="note" style="margin:0 0 14px;'
+            'padding:9px 14px;border-radius:8px;border:1px solid #e0b252;'
+            'background:#fff8e6;color:#5c4400;font:600 13px/1.4 \'Segoe UI\',system-ui,'
+            'sans-serif">&#9888; %s</div>' % html.escape(AI_NOTICE))
+
+
+def add_ai_notice(page: str) -> str:
+    """Insert the AI notice at the top of a page body (idempotent)."""
+    if not page or _AI_MARK in page:
+        return page
+    notice = ai_notice_html()
+    try:
+        banner = re.search(r'<div class="labanner">.*?</div>', page, re.S)
+        if banner:
+            return page[:banner.end()] + notice + page[banner.end():]
+        if re.search(r"<body[^>]*>", page, re.I):
+            return re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + notice, page,
+                          count=1, flags=re.I)
+        return notice + page
+    except Exception:
+        return page
 
 
 def brandify(page: str, tool: str = "", subtitle: str = "",
-             banner: bool = True, footer: bool = True) -> str:
-    """Add header/footer to an already rendered HTML page (idempotent)."""
+             banner: bool = True, footer: bool = True, ai_generated: bool = False) -> str:
+    """Add header/footer to an already rendered HTML page (idempotent).
+
+    ``ai_generated`` adds the AI notice below the header.
+    """
     if not page or _MARK in page or "labrand" in page:
-        return page
+        return add_ai_notice(page) if ai_generated else page
     try:
         head = _MARK + favicon_tag() + "<style>" + brand_css() + "</style>"
         if re.search(r"</head\s*>", page, re.I):
@@ -164,13 +197,15 @@ def brandify(page: str, tool: str = "", subtitle: str = "",
                 page = re.sub(r"</body\s*>", lambda m: f + "</body>", page, count=1, flags=re.I)
             else:
                 page += f
-        return page
+        return add_ai_notice(page) if ai_generated else page
     except Exception:
         return page
 
 
 def write_branded(path, page: str, tool: str = "", subtitle: str = "",
-                  banner: bool = True, footer: bool = True, encoding="utf-8"):
-    out = brandify(page, tool, subtitle, banner=banner, footer=footer)
+                  banner: bool = True, footer: bool = True, encoding="utf-8",
+                  ai_generated: bool = False):
+    out = brandify(page, tool, subtitle, banner=banner, footer=footer,
+                   ai_generated=ai_generated)
     Path(path).write_text(out, encoding=encoding)
     return out

@@ -243,9 +243,16 @@ def run_ado_match(scan_folder: Path, sut: str, model: str, timeout: int,
 
     _write_log_summary(scan_folder, dict(base, signature_count=len(signatures),
                                          source=source, report=str(output_path),
-                                         agent_reply_chars=len(text)))
+                                         agent_reply_chars=len(text),
+                                         ai_notice=ai_backend.AI_NOTICE))
 
     if output_path.exists() and output_path.stat().st_size > 0:
+        try:
+            page = output_path.read_text(encoding="utf-8", errors="replace")
+            output_path.write_text(brand.brandify(page, TOOL_TITLE, sut, ai_generated=True),
+                                   encoding="utf-8")
+        except Exception as exc:                         # cosmetic; never fail the run
+            logger.warning("Could not add the AI notice to %s: %s", output_path, exc)
         logger.info("Known-issue match report written to %s (%d bytes)",
                     output_path, output_path.stat().st_size)
         return True
@@ -259,7 +266,7 @@ def run_ado_match(scan_folder: Path, sut: str, model: str, timeout: int,
     output_path.write_text(brand.brandify(
         FALLBACK_HTML.format(sut=html.escape(sut), sku=html.escape(sku_label),
                              ts=ts, body=html.escape(text)),
-        TOOL_TITLE, sut), encoding="utf-8")
+        TOOL_TITLE, sut, ai_generated=True), encoding="utf-8")
     return True
 
 
